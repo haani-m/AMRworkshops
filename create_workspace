@@ -1,0 +1,14 @@
+create directory:
+
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+createpackage:
+
+ros2 pkg create --build-type ament_python workshop2
+
+workshop2 = name of package
+
+open VSC from folder with:
+
+code workshop2
