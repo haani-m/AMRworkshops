@@ -1,0 +1,11 @@
+docker login lcas.lincoln.ac.uk
+lcas
+lincoln
+
+docker-compose -f kasm-lcas-jammy.docker-compose.yaml pull
+
+docker-compose -f kasm-lcas-jammy.docker-compose.yaml up -d
+
+https://localhost:6901 
+
+docker-compose -f kasm-lcas-jammy.docker-compose.yaml up down
