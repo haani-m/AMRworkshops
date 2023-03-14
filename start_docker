@@ -1,3 +1,4 @@
+--To start docker:
 docker login lcas.lincoln.ac.uk
 lcas
 lincoln
@@ -13,5 +14,9 @@ password
 
 docker-compose -f kasm-lcas-jammy.docker-compose.yaml up down
 
-#keyboard teleop:
+--To open gazebo sim in docker:
+ros2 launch uol_turtlebot_simulator object-search-1.launch.py
+(can switch 1 with 2 or 3 for various environments)
+
+--keyboard teleop:
 ros2 run turtlebot3_teleop teleop_keyboard
