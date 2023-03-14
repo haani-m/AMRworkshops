@@ -8,4 +8,7 @@ docker-compose -f kasm-lcas-jammy.docker-compose.yaml up -d
 
 https://localhost:6901 
 
+kasm_user
+password
+
 docker-compose -f kasm-lcas-jammy.docker-compose.yaml up down
