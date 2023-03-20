@@ -1,1 +1,7 @@
 https://cvexplained.wordpress.com/2020/04/28/color-detection-hsv/ -- details cv2 colour ranges, as well as using an upper and lower mask for colour detection
+
+https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html -- documentation for inrange function
+
+https://docs.opencv.org/4.x/df/d0d/tutorial_find_contours.html -- information on finding countours, documentation from opencv
+
+https://docs.opencv.org/3.4/d4/d73/tutorial_py_contours_begin.html -- contours beginner's guide
