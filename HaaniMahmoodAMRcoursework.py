@@ -17,6 +17,10 @@ import math
 To do:
 remove test code that manually picks mask colour
 
+find out how to check directly infront using laser scan
+as robot is not stopping in front of object in tests
+OR find alternative way of finding out if object is <1m away
+
 find red mask
 test red blue and yellow masks
 test adding masks (will need to change code a far bit if continue with this)
@@ -34,7 +38,7 @@ class ObjectSearcher(Node):
         #HSV masks for the different coloured objects
         self.red_mask = []
         self.green_mask = [(50,100,100),(70,255,255)]
-        self.yellow_mask = [(22, 93, 0), (45, 255, 255)]
+        self.yellow_mask = [(22, 93, 100), (45, 255, 255)]
         self.blue_mask = [(110, 50, 50), (130, 255, 255)]
 
         self.mask_list = (self.red_mask, self.green_mask, self.yellow_mask, self.blue_mask)
@@ -69,7 +73,7 @@ class ObjectSearcher(Node):
 
     #callback functions
     def camera_callback(self, data):
-        cv2.namedWindow("Imagewindows", 1)
+        #cv2.namedWindow("Imagewindows", 1)
 
         #convert ROS image data into cv2 image frame
         bgr_frame = self.br.imgmsg_to_cv2(data, desired_encoding='bgr8')
@@ -78,7 +82,7 @@ class ObjectSearcher(Node):
         hsv_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2HSV)
 
         #testing!!!!!!!!!!!!!!!!!!!!!!
-        self.mask_colour = self.green_mask
+        self.mask_colour = self.yellow_mask
         #!!!!!!!REMOVE!!!!!!!!
 
         #apply mask and find contours
@@ -137,10 +141,10 @@ class ObjectSearcher(Node):
         forward = 0.2
         turn = 0.2
         if self.colour_flag == False:
-            #checks left, right and centre segments of laser scan
+            #checks left, right segments of laser scan
             min_right = self.min_range(data.ranges[:60])
             min_left = self.min_range(data.ranges[-60:])
-            min_centre = self.min_range(data.ranges[-15:15])
+            
 
             #create twist msg
             twist= Twist()
@@ -161,8 +165,10 @@ class ObjectSearcher(Node):
             self.pub_cmd_vel.publish(twist)
 
         elif self.colour_flag == True:
+
+            min_centre = self.min_range(data.ranges[-15:15])
+            
             self.tw=Twist() # twist message to publish
-        
             self.tw.linear.x = self.lin_vel
             self.tw.angular.z = self.turn_vel
             self.pub_cmd_vel.publish(self.tw)
@@ -172,6 +178,7 @@ class ObjectSearcher(Node):
                 self.string = String()
                 self.string.data = "Object found!"
                 self.pub_string.publish(self.string)
+                print("Object found")
 
                 try:
                     self.mask_index +=1
