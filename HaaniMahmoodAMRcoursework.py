@@ -17,35 +17,36 @@ import math
 To do:
 remove test code that manually picks mask colour
 
+troubleshoot problem that is stopping mask from being changed
+
 find out how to check directly infront using laser scan
 as robot is not stopping in front of object in tests
 OR find alternative way of finding out if object is <1m away
 
-find red mask
-test red blue and yellow masks
-test adding masks (will need to change code a far bit if continue with this)
+test adding masks (will need to change code a fair bit if continue with this)
 
 work on roamer code, stop it from getting stuck in one place
 maybe if no colour then spin
 go forward at angle x, maybe random
 spin again
-and etc.'''
+and etc.
+'''
 
 class ObjectSearcher(Node):
     def __init__(self):
         super().__init__('object_searcher')
 
         #HSV masks for the different coloured objects
-        self.red_mask = []
+        self.red_mask1 = [(160, 255, 50), (180, 255, 255)]
+        self.red_mask2 = [(0, 255, 50), (10, 255, 255)] #works for column
+
         self.green_mask = [(50,100,100),(70,255,255)]
         self.yellow_mask = [(22, 93, 100), (45, 255, 255)]
         self.blue_mask = [(110, 50, 50), (130, 255, 255)]
 
-        self.mask_list = (self.red_mask, self.green_mask, self.yellow_mask, self.blue_mask)
+        self.mask_list = (self.red_mask1, self.green_mask, self.yellow_mask, self.blue_mask)
         self.mask_index = 0
         self.mask_colour = self.mask_list[self.mask_index]
-
-
 
         
         self.colour_flag = False #flag to determine which behaviour to use
@@ -82,7 +83,7 @@ class ObjectSearcher(Node):
         hsv_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2HSV)
 
         #testing!!!!!!!!!!!!!!!!!!!!!!
-        self.mask_colour = self.yellow_mask
+        #self.mask_colour = self.yellow_mask
         #!!!!!!!REMOVE!!!!!!!!
 
         #apply mask and find contours
@@ -166,7 +167,10 @@ class ObjectSearcher(Node):
 
         elif self.colour_flag == True:
 
-            min_centre = self.min_range(data.ranges[-15:15])
+            #min_centre = self.min_range(data.ranges[0])
+            min_centre = data.ranges[0]
+            #print(data.ranges[0])
+            print(min_centre)
             
             self.tw=Twist() # twist message to publish
             self.tw.linear.x = self.lin_vel
