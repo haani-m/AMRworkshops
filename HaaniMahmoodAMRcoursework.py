@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
+
 from cv_bridge import CvBridge 
 import cv2
 import numpy as np
@@ -18,11 +19,9 @@ To do:
 remove test code that manually picks mask colour
 
 troubleshoot problem that is stopping mask from being changed
+troubleshoot red mask chasing segments of orange walls DOUBLE CHECK THIS
 
-find out how to check directly infront using laser scan
-as robot is not stopping in front of object in tests
 OR find alternative way of finding out if object is <1m away
-
 test adding masks (will need to change code a fair bit if continue with this)
 
 work on roamer code, stop it from getting stuck in one place
@@ -30,6 +29,9 @@ maybe if no colour then spin
 go forward at angle x, maybe random
 spin again
 and etc.
+
+troubleshoot spin problem
+
 '''
 
 class ObjectSearcher(Node):
@@ -44,24 +46,26 @@ class ObjectSearcher(Node):
         self.yellow_mask = [(22, 93, 100), (45, 255, 255)]
         self.blue_mask = [(110, 50, 50), (130, 255, 255)]
 
-        self.mask_list = (self.red_mask1, self.green_mask, self.yellow_mask, self.blue_mask)
-        self.mask_index = 0
-        self.mask_colour = self.mask_list[self.mask_index]
-
+        self.mask_list = (self.yellow_mask, self.red_mask1, self.green_mask,  self.blue_mask)
         
-        self.colour_flag = False #flag to determine which behaviour to use
+
+        #flags to determine behaviour
+        self.colour_flag = False 
+        
 
         self.turn_vel = 0.0
         self.lin_vel = 0.0
-        self.min_distance = 0.5 #min distance used for roamer function
+        self.min_distance = 0.7 #min distance used for roamer function
         self.object_max_dist = 1.0 # max distance robot can be from object
         self.centre_flag = False
 
         #publisher and subscribers
         self.pub_cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
-
-        timer_period= 0.1
-        #self.timer = self.create_timer(timer_period, self.timer_callback) #may be unncecessary
+        
+        #-------------------------------------------------
+        timer_period= 10
+        self.timer = self.create_timer(timer_period, self.timer_callback) #may be unncecessary
+        #!!!!!!!!!!!!!!!!!!!!!REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!
 
         self.sub_image = self.create_subscription(Image, '/camera/image_raw', self.camera_callback, 10)
 
@@ -74,7 +78,7 @@ class ObjectSearcher(Node):
 
     #callback functions
     def camera_callback(self, data):
-        #cv2.namedWindow("Imagewindows", 1)
+        
 
         #convert ROS image data into cv2 image frame
         bgr_frame = self.br.imgmsg_to_cv2(data, desired_encoding='bgr8')
@@ -82,11 +86,12 @@ class ObjectSearcher(Node):
         #Convert image to HSV for better colour masking
         hsv_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2HSV)
 
-        #testing!!!!!!!!!!!!!!!!!!!!!!
-        #self.mask_colour = self.yellow_mask
-        #!!!!!!!REMOVE!!!!!!!!
+
+        self.mask_index = 0
+        self.mask_colour = self.mask_list[self.mask_index]
 
         #apply mask and find contours
+        print(self.mask_index)
         frame_mask = cv2.inRange(hsv_frame, self.mask_colour[0], self.mask_colour[1])
         contours, hierarchy = cv2.findContours(frame_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -99,10 +104,14 @@ class ObjectSearcher(Node):
         if len(contours) > 0:
             self.colour_flag = True
             M = cv2.moments(contours[0])
-            if M['m00'] > 0:
+
+            #check contour area
+            if M['m00'] > 20:
                 #find centroid and draw circle
                 cx = int(M['m10']/M['m00'])
                 cy = int(M['m01']/M['m00'])
+                self.cx = cx
+                self.cy = cy
                 cv2.circle(bgr_frame, (round(cx), round(cy)), 50, (0, 255, 0), -1)
                             
                 #determines which way to move depending on the position of the object within the camera frame
@@ -139,33 +148,40 @@ class ObjectSearcher(Node):
         return min_range
 
     def laser_callback(self, data):
+
+        Testflag1 = False
+
         forward = 0.2
         turn = 0.2
-        if self.colour_flag == False:
+        if self.colour_flag == False and self.spin_flag == False:
             #checks left, right segments of laser scan
-            min_right = self.min_range(data.ranges[:60])
-            min_left = self.min_range(data.ranges[-60:])
+            min_left = self.min_range(data.ranges[:60])
+            min_right = self.min_range(data.ranges[-60:])
             
 
             #create twist msg
             twist= Twist()
 
             #publish twist msg with data needed for current environment
-            if min_right < self.min_distance:
-                self.get_logger().info('turning left')
+            if min_left < self.min_distance:
+                self.get_logger().info('turning right')
                 twist.angular.z = -0.2
         
-            elif min_left < self.min_distance:
-                self.get_logger().info('turning right')
+            elif min_right < self.min_distance:
+                self.get_logger().info('turning left')
                 twist.angular.z = 0.2
 
+            elif (min_right < self.min_distance) and (min_left < self.min_distance):
+                self.get_logger().info('turning around')
+                twist.angular.z = 0.4
+                twist.linear.x = -0.2
             else:
                 self.get_logger().info("going straight")
                 twist.linear.x = 0.2
         
             self.pub_cmd_vel.publish(twist)
 
-        elif self.colour_flag == True:
+        elif self.colour_flag == True and Testflag1 == False:
 
             #min_centre = self.min_range(data.ranges[0])
             min_centre = data.ranges[0]
@@ -183,18 +199,34 @@ class ObjectSearcher(Node):
                 self.string.data = "Object found!"
                 self.pub_string.publish(self.string)
                 print("Object found")
-
+                print(self.mask_index)
                 try:
                     self.mask_index +=1
                 except IndexError:
                     #shutdown if there are no more objects to be found
                     rclpy.shutdown
 
+                print(self.mask_index)
                 #reset all flags and values to return to standard behaviour
                 self.turn_vel = 0.0
                 self.lin_vel = 0.0
                 self.centre_flag = False
                 self.colour_flag = False
+
+
+        elif self.colour_flag == True and Testflag1 == True:
+            
+            opp = 960 - self.cx #distance between middle of camera and centroid
+        
+            
+
+    def timer_callback(self):
+        if self.colour_flag == False:
+            self.tw = Twist() 
+            self.tw.angular.z =  0.4
+            self.pub_cmd_vel.publish(self.tw)
+           
+
 
 def main(args=None):
     rclpy.init(args=args)
