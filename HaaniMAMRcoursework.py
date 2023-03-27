@@ -53,12 +53,11 @@ class ObjectSearcher(Node):
 
         self.mask_list = [self.yellow_mask, self.red_mask2, self.green_mask,  self.blue_mask]
         
-        self.index_of_interest = -1
+        self.index_of_interest = int
 
         #flags to determine behaviour
         self.colour_flag = False 
-        self.centre_flag = False
-
+     
         
 
         self.turn_vel = 0.0
@@ -139,22 +138,27 @@ class ObjectSearcher(Node):
             else:
                 print("Empty list")
 
-
+        index = 0
         #find object of interest with the biggest area to determine which mask to use
         for i in carea_List:
             largest = 0
-            index = 0
+            #print(i)
+            #print(largest)
             if i > largest:
                 largest = i
                 self.index_of_interest = index
+                self.colour_flag = True
             
             index += 1
+            #print(index)
+            #print(self.index_of_interest)
 
         #checks if object of interest was found in camera
-        if self.index_of_interest != -1:
+        if self.colour_flag == True:
 
             M = moments_List[self.index_of_interest]
             #draw contour and centroid
+            print(self.index_of_interest)
             frame_contours = cv2.drawContours(self.bgr_frame, contour_List[self.index_of_interest], 0, (0, 255, 0), 20)
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
@@ -175,25 +179,12 @@ class ObjectSearcher(Node):
                     self.turn_vel = -0.3
                     self.lin_vel = 0.0
             
-            
             #centre
             else: 
                     self.turn_vel = 0.0
                     self.lin_vel = 0.2
+    
 
-                    #if self.centre < self.object_max_dist:
-                     #   print("Distance:", self.centre, "Y positions:", cy)
-
-            
-
-            '''
-            #find way of determining if OOI is close enough
-            #temporary value
-            elif cy < 500:
-                print("Object found")
-                self.mask_list.pop(self.index_of_interest)
-                self.index_of_interest = -1
-            '''
             current_frame_contours_small = cv2.resize(frame_contours, (0,0), fx=0.4, fy=0.4) # reduce image size
             cv2.imshow("Image window", current_frame_contours_small)
             cv2.waitKey(1) 
@@ -201,12 +192,11 @@ class ObjectSearcher(Node):
         #roaming behaviour is implemented if no OOI are found, found in laserscan callback
         else:
             self.colour_flag = 0
-            self.index_of_interest = -1 
-            cv2.imshow("Image windows", self.bgr_frame)
+            current_frame = cv2.resize(self.bgr_frame, (0,0), fx=0.4, fy=0.4) # reduce image size
+            cv2.imshow("Image window", current_frame)
+            cv2.waitKey(1)   
 
-        current_frame_contours_small = cv2.resize(frame_contours, (0,0), fx=0.4, fy=0.4) # reduce image size
-        cv2.imshow("Image window", current_frame_contours_small)
-        cv2.waitKey(1)     
+          
 
           
 
@@ -225,7 +215,7 @@ class ObjectSearcher(Node):
         #self.centre = self.min_range(data.ranges[-10:10])
         self.centre = data.ranges[0]
 
-        if self.index_of_interest == -1:
+        if self.colour_flag == False:
             #simple reactive control behaviour
             twist = Twist()
 
@@ -237,7 +227,7 @@ class ObjectSearcher(Node):
                 self.get_logger().info('turning left')
                 twist.angular.z = 0.2
 
-            elif (self.min_right < self.min_distance) and (self.min_left < self.min_distance):
+            elif (self.min_range(data.ranges[:80]) < self.min_distance) and (self.min_range(data.ranges[-80:]) < self.min_distance):
                 self.get_logger().info('turning around')
                 twist.angular.z = 0.4
                 twist.linear.x = -0.2
@@ -247,7 +237,7 @@ class ObjectSearcher(Node):
         
             self.pub_cmd_vel.publish(twist)
         
-        else:
+        elif self.colour_flag == True:
             
             twist = Twist()
             twist.angular.z = self.turn_vel
@@ -258,6 +248,7 @@ class ObjectSearcher(Node):
                 print("Distance:", self.centre, "Y positions:", self.cy)
 
                 self.mask_list.pop(self.index_of_interest)
+                self.colour_flag = False
 
 
             
