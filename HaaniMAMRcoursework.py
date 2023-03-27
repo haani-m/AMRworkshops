@@ -99,7 +99,7 @@ class ObjectSearcher(Node):
             M = cv2.moments(contours[0])
             area = M['m00']
 
-            if area>20:
+            if area>50:
                 return [M, contours, area]
             
             else:
@@ -158,7 +158,7 @@ class ObjectSearcher(Node):
 
             M = moments_List[self.index_of_interest]
             #draw contour and centroid
-            print(self.index_of_interest)
+            print("IOI:", self.index_of_interest)
             frame_contours = cv2.drawContours(self.bgr_frame, contour_List[self.index_of_interest], 0, (0, 255, 0), 20)
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
@@ -221,14 +221,20 @@ class ObjectSearcher(Node):
 
             if self.min_left < self.min_distance:
                 self.get_logger().info('turning right')
+                print(self.min_left - self.min_distance)
                 twist.angular.z = -0.2
         
             elif self.min_right < self.min_distance:
                 self.get_logger().info('turning left')
+                print(self.min_left - self.min_distance)
                 twist.angular.z = 0.2
 
             elif (self.min_range(data.ranges[:80]) < self.min_distance) and (self.min_range(data.ranges[-80:]) < self.min_distance):
                 self.get_logger().info('turning around')
+                twist.angular.z = 0.4
+                twist.linear.x = -0.2
+            
+            elif (self.centre < 0.3):
                 twist.angular.z = 0.4
                 twist.linear.x = -0.2
             else:
