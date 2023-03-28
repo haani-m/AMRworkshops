@@ -1,5 +1,14 @@
-#Haani Mahmood 250270480
-#Autonomous Mobile RObitcs Coursework
+'''
+Haani Mahmood 250270480
+Autonomous Mobile Robotics Coursework
+References:
+
+https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/cmp3103m_ros2_code_fragments/colour_chaser2.py
+-Used as the basis for the camera_callback function
+
+https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/cmp3103m_ros2_code_fragments/roamer.py
+-Adapted roaming fuctionality into laserscan_callback function
+-Provided min_range function'''
 
 #imports:
 import rclpy
@@ -8,13 +17,10 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
-
-
 from cv_bridge import CvBridge 
 import cv2
 import numpy as np
 import math
-
 
 
 class ObjectSearcher(Node):
@@ -49,10 +55,10 @@ class ObjectSearcher(Node):
         #publisher and subscribers
         self.pub_cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
         
-        #-------------------------------------------------
+        
         timer_period= 10
-        self.timer = self.create_timer(timer_period, self.timer_callback) #may be unncecessary
-        #!!!!!!!!!!!!!!!!!!!!!REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.timer = self.create_timer(timer_period, self.timer_callback) 
+        
 
         self.sub_image = self.create_subscription(Image, '/camera/image_raw', self.camera_callback, 10)
 
@@ -127,20 +133,7 @@ class ObjectSearcher(Node):
 
         index = 0
 
-        #find object of interest with the biggest area to determine which mask to use
-        '''
-        for i in carea_List:
-            largest = 0
-            #print(i)
-            #print(largest)
-            if i > largest:
-                largest = i
-                self.index_of_interest = index
-                self.colour_flag = True
-            
-            index += 1
-            #print(index)
-            #print(self.index_of_interest)'''
+        #find object of interest using height of centroid
         
         for i in moments_List:
             
@@ -160,19 +153,16 @@ class ObjectSearcher(Node):
 
             M = moments_List[self.index_of_interest]
             A = M['m00']
-            #draw contour and centroid
-            #print("IOI:", self.index_of_interest)
+            
             frame_contours = cv2.drawContours(self.bgr_frame, contour_List[self.index_of_interest], 0, (0, 255, 0), 20)
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
 
             self.cy = cy
-            #print("CY:", cy)
-            #print("Area:", A)
+            
             cv2.circle(self.bgr_frame, (round(cx), round(cy)), 50, (0, 255, 0), -1)
 
             #chase centroid
-
             #left
             if cx < 900:
                     self.turn_vel = 0.3
@@ -183,7 +173,7 @@ class ObjectSearcher(Node):
                     self.turn_vel = -0.3
                     self.lin_vel = 0.0
 
-
+            
             #centre
             else: 
                     self.turn_vel = 0.0
@@ -191,7 +181,6 @@ class ObjectSearcher(Node):
             
             #if centroid is at a certain height and area of segment is of big enough area, can be assumed object is close enough
             if self.cy > 410 and A> 380000:
-                #print("Distance:", self.centre, "Y positions:", self.cy)
                 print("Object found")
                 self.mask_list.pop(self.index_of_interest)
                 self.colour_flag = False
@@ -201,18 +190,14 @@ class ObjectSearcher(Node):
             cv2.imshow("Image window", current_frame_contours_small)
             cv2.waitKey(1) 
 
-        #roaming behaviour is implemented if no OOI are found, found in laserscan callback
+        
         else:
             self.colour_flag = 0
             current_frame = cv2.resize(self.bgr_frame, (0,0), fx=0.4, fy=0.4) # reduce image size
             cv2.imshow("Image window", current_frame)
             cv2.waitKey(1)   
 
-          
-
-          
-
-
+        
    
     def min_range(self, range):
         min_range = math.inf
@@ -221,40 +206,37 @@ class ObjectSearcher(Node):
                 min_range = v
         return min_range
 
+
+
     def laser_callback(self, data):
         self.min_left = self.min_range(data.ranges[:60])
         self.min_right = self.min_range(data.ranges[-60:])
-        #self.centre = self.min_range(data.ranges[-10:10])
+        
         self.centre = data.ranges[0]
 
         if self.timer_flag == False and self.start_flag == False:
             #simple reactive control behaviour
             twist = Twist()
-            temp = 0#remove!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+    
+            #Publishes velocity commands determined by camera input and/or laserscan data
+        
             if self.min_left < self.min_distance:
-                #self.get_logger().info('turning right')
-                #print(self.min_left - self.min_distance)
-                twist.angular.z = -0.2
+                self.turn_vel = -0.2
+                self.lin_vel = 0.0                
         
-            elif self.min_right < self.min_distance:
-                #self.get_logger().info('turning left')
-                #print(self.min_left - self.min_distance)
-                twist.angular.z = 0.2
+            elif self.min_right < self.min_distance:                
+                self.turn_vel = 0.2 
+                self.lin_vel = 0.0                
 
-            elif (temp == 1):
-
-                twist.angular.z = 3.14
-                twist.linear.x = -0.2
-            else:
-                #self.get_logger().info("going straight")
-                twist.linear.x = 0.2
-
-            if (self.min_range(data.ranges[:70]) < 0.3) and (self.min_range(data.ranges[-70:]) < 0.3):
-                #self.get_logger().info('turning around')
-                twist.angular.z = 3.14
-                twist.linear.x = -0.2
+            elif ((self.min_range(data.ranges[:70]) < 0.3) and (self.min_range(data.ranges[-70:]) < 0.3) or self.centre < 0.3):    
+                self.turn_vel = 3.14
+                self.lin_vel = -0.2                
         
+            else:                
+                self.lin_vel = 0.2         
+
+            twist.linear.x = self.lin_vel
+            twist.angular.z = self.turn_vel
             self.pub_cmd_vel.publish(twist)
 
         elif self.timer_flag == True:
@@ -274,14 +256,7 @@ class ObjectSearcher(Node):
             twist.angular.z = self.turn_vel
             twist.linear.x = self.lin_vel
             self.pub_cmd_vel.publish(twist)
-
-            '''
-            if self.cy > 410:
-                print("Distance:", self.centre, "Y positions:", self.cy)
-
-                self.mask_list.pop(self.index_of_interest)
-                self.colour_flag = False'''
-            
+        
     
     def rotate(self):
         twist = Twist()
@@ -314,39 +289,4 @@ if __name__ == '__main__':
     main()
                 
             
-        
-        
-    
 
-
-'''
-References:
-
-https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/cmp3103m_ros2_code_fragments/colour_chaser2.py
--Used as the basis for the colour detection and "chasing" behaviour
-
-https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/cmp3103m_ros2_code_fragments/roamer.py
--Used as a basis for the standard roaming behaviour
-'''
-
-'''
-To do:
-remove test code that manually picks mask colour
-get rid of test flags and unneccessary flags
-
-clean up camera callback 1 and 2
-clean up old commented out code
-test using area and cy position for determining whether object has been found
-remove redundant cylinder check in laserscan or camera callback
-
-make robot spin in circle at start of program
-
-
-work on roamer code, stop it from getting stuck in one place
-maybe if no colour then spin
-go forward at angle x, maybe random
-spin again
-and etc.
-
-
-'''
