@@ -17,17 +17,16 @@ import math
 '''
 To do:
 remove test code that manually picks mask colour
-get rid of test flag
+get rid of test flags and unneccessary flags
+
 clean up camera callback 1 and 2
+clean up old commented out code
+test using area and cy position for determining whether object has been found
+remove redundant cylinder check in laserscan or camera callback
 
-test circle spinning on timer callback
+make robot spin in circle at start of program
 
 
-troubleshoot problem that is stopping mask from being changed
-troubleshoot red mask chasing segments of orange walls DOUBLE CHECK THIS
-
-OR find alternative way of finding out if object is <1m away
-test adding masks (will need to change code a fair bit if continue with this)
 
 work on roamer code, stop it from getting stuck in one place
 maybe if no colour then spin
@@ -35,7 +34,7 @@ go forward at angle x, maybe random
 spin again
 and etc.
 
-troubleshoot spin problem
+
 
 '''
 
@@ -57,6 +56,8 @@ class ObjectSearcher(Node):
 
         #flags to determine behaviour
         self.colour_flag = False 
+        self.timer_flag = False
+        self.start_flag = True
      
         
 
@@ -157,6 +158,7 @@ class ObjectSearcher(Node):
         if self.colour_flag == True:
 
             M = moments_List[self.index_of_interest]
+            A = M['m00']
             #draw contour and centroid
             print("IOI:", self.index_of_interest)
             frame_contours = cv2.drawContours(self.bgr_frame, contour_List[self.index_of_interest], 0, (0, 255, 0), 20)
@@ -165,6 +167,7 @@ class ObjectSearcher(Node):
 
             self.cy = cy
             print("CY:", cy)
+            print("Area:", A)
             cv2.circle(self.bgr_frame, (round(cx), round(cy)), 50, (0, 255, 0), -1)
 
             #chase centroid
@@ -179,11 +182,23 @@ class ObjectSearcher(Node):
                     self.turn_vel = -0.3
                     self.lin_vel = 0.0
             
+            elif self.cy > 410:
+                print("Distance:", self.centre, "Y positions:", self.cy, "Area:", A)
+
+                self.mask_list.pop(self.index_of_interest)
+                self.colour_flag = False
+
             #centre
             else: 
                     self.turn_vel = 0.0
                     self.lin_vel = 0.2
-    
+            '''
+            if self.cy > 410:
+                print("Distance:", self.centre, "Y positions:", self.cy)
+                print("Object found")
+                self.mask_list.pop(self.index_of_interest)
+                self.colour_flag = False'''
+
 
             current_frame_contours_small = cv2.resize(frame_contours, (0,0), fx=0.4, fy=0.4) # reduce image size
             cv2.imshow("Image window", current_frame_contours_small)
@@ -218,7 +233,8 @@ class ObjectSearcher(Node):
         if self.colour_flag == False:
             #simple reactive control behaviour
             twist = Twist()
-
+            temp = 0#remove!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            
             if self.min_left < self.min_distance:
                 self.get_logger().info('turning right')
                 print(self.min_left - self.min_distance)
@@ -229,13 +245,15 @@ class ObjectSearcher(Node):
                 print(self.min_left - self.min_distance)
                 twist.angular.z = 0.2
 
-            elif (self.min_range(data.ranges[:80]) < self.min_distance) and (self.min_range(data.ranges[-80:]) < self.min_distance):
+            elif (self.min_range(data.ranges[:70]) < self.min_distance) and (self.min_range(data.ranges[-70:]) < self.min_distance) and (self.centre <0.3):
                 self.get_logger().info('turning around')
-                twist.angular.z = 0.4
+                twist.angular.z = 3.14
                 twist.linear.x = -0.2
             
-            elif (self.centre < 0.3):
-                twist.angular.z = 0.4
+            
+            elif (temp == 1):
+
+                twist.angular.z = 3.14
                 twist.linear.x = -0.2
             else:
                 self.get_logger().info("going straight")
@@ -243,6 +261,7 @@ class ObjectSearcher(Node):
         
             self.pub_cmd_vel.publish(twist)
         
+        #Publishes velocity commands determined by camera input
         elif self.colour_flag == True:
             
             twist = Twist()
@@ -250,91 +269,39 @@ class ObjectSearcher(Node):
             twist.linear.x = self.lin_vel
             self.pub_cmd_vel.publish(twist)
 
+            '''
             if self.cy > 410:
                 print("Distance:", self.centre, "Y positions:", self.cy)
 
                 self.mask_list.pop(self.index_of_interest)
-                self.colour_flag = False
+                self.colour_flag = False'''
 
-
-            
-        '''
-        Testflag1 = False
-
-        forward = 0.2
-        turn = 0.2
-        if self.colour_flag == False:
-            #checks left, right segments of laser scan
-            min_left = self.min_range(data.ranges[:60])
-            min_right = self.min_range(data.ranges[-60:])
-            
-
-            #create twist msg
-            twist= Twist()
-
-            #publish twist msg with data needed for current environment
-            if min_left < self.min_distance:
-                self.get_logger().info('turning right')
-                twist.angular.z = -0.2
+        elif self.timer_flag == True:
+            self.rotate()
+            self.timer_flag = False
         
-            elif min_right < self.min_distance:
-                self.get_logger().info('turning left')
-                twist.angular.z = 0.2
-
-            elif (min_right < self.min_distance) and (min_left < self.min_distance):
-                self.get_logger().info('turning around')
-                twist.angular.z = 0.4
-                twist.linear.x = -0.2
-            else:
-                self.get_logger().info("going straight")
-                twist.linear.x = 0.2
-        
-            self.pub_cmd_vel.publish(twist)
-
-        elif self.colour_flag == True and Testflag1 == False:
-
-            #min_centre = self.min_range(data.ranges[0])
-            min_centre = data.ranges[0]
-            #print(data.ranges[0])
-            print(min_centre)
+        elif self.start_flag == True:
+            self.rotate()
+            self.start_flag = False
             
-            self.tw=Twist() # twist message to publish
-            self.tw.linear.x = self.lin_vel
-            self.tw.angular.z = self.turn_vel
-            self.pub_cmd_vel.publish(self.tw)
-
-            #check if object is within desired distance
-            if self.centre_flag == True and min_centre < self.object_max_dist:
-                self.string = String()
-                self.string.data = "Object found!"
-                self.pub_string.publish(self.string)
-                print("Object found")
-                print(self.mask_index)
-                try:
-                    self.mask_index +=1
-                except IndexError:
-                    #shutdown if there are no more objects to be found
-                    rclpy.shutdown
-
-                print(self.mask_index)
-                #reset all flags and values to return to standard behaviour
-                self.turn_vel = 0.0
-                self.lin_vel = 0.0
-                self.centre_flag = False
-                self.colour_flag = False
-
-
-        elif self.colour_flag == True and Testflag1 == True:
-            
-            opp = 960 - self.cx #distance between middle of camera and centroid'''
-        
+    
+    def rotate(self):
+        twist = Twist()
+        twist.angular.z = 0.4
+        self.pub_cmd_vel.publish(twist)
             
     #every t seconds if not chasing colour, the robot will turn in a circle to try and see if it has missed a potential pillar
+    #or if it is stuck
+    #This is performed in laser callback to prevent overlapping vel publishing
     def timer_callback(self):
-        if self.index_of_interest == -1:
-            self.tw = Twist() 
-            self.tw.angular.z =  0.4
-            self.pub_cmd_vel.publish(self.tw)
+        
+        if self.timer_flag == True and self.colour_flag == False:
+            self.timer_flag = False
+
+        elif self.colour_flag == False:
+            self.timer_flag = True
+
+        
            
 
 
