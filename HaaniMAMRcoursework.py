@@ -14,29 +14,8 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 import math
-'''
-To do:
-remove test code that manually picks mask colour
-get rid of test flags and unneccessary flags
-
-clean up camera callback 1 and 2
-clean up old commented out code
-test using area and cy position for determining whether object has been found
-remove redundant cylinder check in laserscan or camera callback
-
-make robot spin in circle at start of program
 
 
-
-work on roamer code, stop it from getting stuck in one place
-maybe if no colour then spin
-go forward at angle x, maybe random
-spin again
-and etc.
-
-
-
-'''
 
 class ObjectSearcher(Node):
     def __init__(self):
@@ -50,7 +29,7 @@ class ObjectSearcher(Node):
         self.yellow_mask = [(22, 93, 100), (45, 255, 255)]
         self.blue_mask = [(110, 50, 50), (130, 255, 255)]
 
-        self.mask_list = [self.yellow_mask, self.red_mask2, self.green_mask,  self.blue_mask]
+        self.mask_list = [self.yellow_mask, self.red_mask1, self.red_mask2, self.green_mask,  self.blue_mask]
         
         self.index_of_interest = int
 
@@ -100,7 +79,7 @@ class ObjectSearcher(Node):
             M = cv2.moments(contours[0])
             area = M['m00']
 
-            if area>50:
+            if area>100:
                 return [M, contours, area]
             
             else:
@@ -111,7 +90,13 @@ class ObjectSearcher(Node):
 
 
     def camera_callback(self, data):
-        
+        #or ((len(self.mask_list ==1)) and (self.mask_list[0] == self.red_mask1 or self.red_mask2))
+
+        if (len(self.mask_list) == 0) :
+            print("All Cylinders found, destroying node")
+            rclpy.shutdown()
+
+
         #convert ROS image data into cv2 image frame
         self.bgr_frame = self.br.imgmsg_to_cv2(data, desired_encoding='bgr8')
         #Convert image to HSV for better colour masking
@@ -135,12 +120,15 @@ class ObjectSearcher(Node):
                 moments_List.append(0)
                 contour_List.append(0)
                 carea_List.append(0)
+                self.colour_flag = False
 
             else:
                 print("Empty list")
 
         index = 0
+
         #find object of interest with the biggest area to determine which mask to use
+        '''
         for i in carea_List:
             largest = 0
             #print(i)
@@ -152,7 +140,20 @@ class ObjectSearcher(Node):
             
             index += 1
             #print(index)
-            #print(self.index_of_interest)
+            #print(self.index_of_interest)'''
+        
+        for i in moments_List:
+            
+            l = math.inf
+            if i != 0:
+                cy = int(i['m01']/i['m00'])
+                if cy<l:
+                    l=cy
+                    self.index_of_interest = index
+                    self.colour_flag = True
+            
+            index +=1
+
 
         #checks if object of interest was found in camera
         if self.colour_flag == True:
@@ -160,14 +161,14 @@ class ObjectSearcher(Node):
             M = moments_List[self.index_of_interest]
             A = M['m00']
             #draw contour and centroid
-            print("IOI:", self.index_of_interest)
+            #print("IOI:", self.index_of_interest)
             frame_contours = cv2.drawContours(self.bgr_frame, contour_List[self.index_of_interest], 0, (0, 255, 0), 20)
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
 
             self.cy = cy
-            print("CY:", cy)
-            print("Area:", A)
+            #print("CY:", cy)
+            #print("Area:", A)
             cv2.circle(self.bgr_frame, (round(cx), round(cy)), 50, (0, 255, 0), -1)
 
             #chase centroid
@@ -181,23 +182,19 @@ class ObjectSearcher(Node):
             elif cx >= 1200:
                     self.turn_vel = -0.3
                     self.lin_vel = 0.0
-            
-            elif self.cy > 410:
-                print("Distance:", self.centre, "Y positions:", self.cy, "Area:", A)
 
-                self.mask_list.pop(self.index_of_interest)
-                self.colour_flag = False
 
             #centre
             else: 
                     self.turn_vel = 0.0
                     self.lin_vel = 0.2
-            '''
-            if self.cy > 410:
-                print("Distance:", self.centre, "Y positions:", self.cy)
+            
+            #if centroid is at a certain height and area of segment is of big enough area, can be assumed object is close enough
+            if self.cy > 410 and A> 380000:
+                #print("Distance:", self.centre, "Y positions:", self.cy)
                 print("Object found")
                 self.mask_list.pop(self.index_of_interest)
-                self.colour_flag = False'''
+                self.colour_flag = False
 
 
             current_frame_contours_small = cv2.resize(frame_contours, (0,0), fx=0.4, fy=0.4) # reduce image size
@@ -230,39 +227,48 @@ class ObjectSearcher(Node):
         #self.centre = self.min_range(data.ranges[-10:10])
         self.centre = data.ranges[0]
 
-        if self.colour_flag == False:
+        if self.timer_flag == False and self.start_flag == False:
             #simple reactive control behaviour
             twist = Twist()
             temp = 0#remove!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            
+
             if self.min_left < self.min_distance:
-                self.get_logger().info('turning right')
-                print(self.min_left - self.min_distance)
+                #self.get_logger().info('turning right')
+                #print(self.min_left - self.min_distance)
                 twist.angular.z = -0.2
         
             elif self.min_right < self.min_distance:
-                self.get_logger().info('turning left')
-                print(self.min_left - self.min_distance)
+                #self.get_logger().info('turning left')
+                #print(self.min_left - self.min_distance)
                 twist.angular.z = 0.2
 
-            elif (self.min_range(data.ranges[:70]) < self.min_distance) and (self.min_range(data.ranges[-70:]) < self.min_distance) and (self.centre <0.3):
-                self.get_logger().info('turning around')
-                twist.angular.z = 3.14
-                twist.linear.x = -0.2
-            
-            
             elif (temp == 1):
 
                 twist.angular.z = 3.14
                 twist.linear.x = -0.2
             else:
-                self.get_logger().info("going straight")
+                #self.get_logger().info("going straight")
                 twist.linear.x = 0.2
+
+            if (self.min_range(data.ranges[:70]) < 0.3) and (self.min_range(data.ranges[-70:]) < 0.3):
+                #self.get_logger().info('turning around')
+                twist.angular.z = 3.14
+                twist.linear.x = -0.2
         
             self.pub_cmd_vel.publish(twist)
+
+        elif self.timer_flag == True:
+            self.rotate()
+            self.timer_flag = False
+        
+        elif self.start_flag == True:
+            self.rotate()
+            self.rotate()
+            self.rotate()
+            self.start_flag = False
         
         #Publishes velocity commands determined by camera input
-        elif self.colour_flag == True:
+        if self.colour_flag == True:
             
             twist = Twist()
             twist.angular.z = self.turn_vel
@@ -275,19 +281,11 @@ class ObjectSearcher(Node):
 
                 self.mask_list.pop(self.index_of_interest)
                 self.colour_flag = False'''
-
-        elif self.timer_flag == True:
-            self.rotate()
-            self.timer_flag = False
-        
-        elif self.start_flag == True:
-            self.rotate()
-            self.start_flag = False
             
     
     def rotate(self):
         twist = Twist()
-        twist.angular.z = 0.4
+        twist.angular.z = 0.5
         self.pub_cmd_vel.publish(twist)
             
     #every t seconds if not chasing colour, the robot will turn in a circle to try and see if it has missed a potential pillar
@@ -301,8 +299,6 @@ class ObjectSearcher(Node):
         elif self.colour_flag == False:
             self.timer_flag = True
 
-        
-           
 
 
 def main(args=None):
@@ -331,4 +327,26 @@ https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/c
 
 https://github.com/LCAS/teaching/blob/lcas_humble/cmp3103m_ros2_code_fragments/cmp3103m_ros2_code_fragments/roamer.py
 -Used as a basis for the standard roaming behaviour
+'''
+
+'''
+To do:
+remove test code that manually picks mask colour
+get rid of test flags and unneccessary flags
+
+clean up camera callback 1 and 2
+clean up old commented out code
+test using area and cy position for determining whether object has been found
+remove redundant cylinder check in laserscan or camera callback
+
+make robot spin in circle at start of program
+
+
+work on roamer code, stop it from getting stuck in one place
+maybe if no colour then spin
+go forward at angle x, maybe random
+spin again
+and etc.
+
+
 '''
